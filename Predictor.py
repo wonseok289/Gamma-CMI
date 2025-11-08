@@ -8,11 +8,16 @@ class Predictor(nn.Module):
         self.num_classes = num_classes
         input_dim = feature_dim * 2  # feature + mask
         self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.bn1 = nn.BatchNorm1d(hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, num_classes)
+        self.dropout = nn.Dropout()
 
     def forward(self, x, m):
         x = torch.cat([x * m, m], dim=-1)
-        h = F.relu(self.fc1(x))
+        h = self.fc1(x)
+        h = self.bn1(h)
+        h = F.relu(h)
+        h = self.dropout(h)
         logits = self.fc2(h)
 
-        return F.softmax(logits, dim=-1) # 다중 분류용이라 이진 분류 해야하면 다시 만들어야함 
+        return F.softmax(logits, dim=-1) # 다중 분류용이라 이진 분류 해야하면 다시 만들어야함

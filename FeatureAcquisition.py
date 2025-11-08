@@ -48,14 +48,16 @@ class FeatureAcquisition():
         num_samples = self.num_samples
         predictor = self.predictor
 
+        device = next(predictor.parameters()).device
+
         x_sampled = self.conditional_sample() # 전체 값이 샘플링된 x
         m_repeated = np.repeat(a=m, repeats=num_samples, axis=0) # 기존 x의 mask
 
         m_upsampled = np.random.binomial(n=1, p=gamma, size=m_repeated.shape) # 각 feature별로 0 또는 1로 변형 
         m_repeated = np.maximum(m_repeated, m_upsampled) # 위에서는 모든 feature별로 진행했으니 max로 병합
         
-        x_sampled = torch.tensor(x_sampled, dtype=torch.float32) # tensor로 변경
-        m_repeated = torch.tensor(m_repeated, dtype=torch.float32)
+        x_sampled = torch.tensor(x_sampled, dtype=torch.float32, device=device) # tensor로 변경
+        m_repeated = torch.tensor(m_repeated, dtype=torch.float32, device=device)
 
         with torch.no_grad():
             p_now = predictor(x_sampled, m_repeated).cpu().numpy()
