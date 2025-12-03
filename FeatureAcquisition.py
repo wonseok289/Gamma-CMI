@@ -32,8 +32,8 @@ class FeatureAcquisition():
         x = self.x
         m = self.m
         num_samples = self.num_samples
-        x_rep = np.repeat(a=x, repeats=num_samples, axis=0)
-        m_rep = np.repeat(a=m, repeats=num_samples, axis=0)
+        x_rep = np.repeat(a=x.cpu().numpy(), repeats=num_samples, axis=0)
+        m_rep = np.repeat(a=m.cpu().numpy(), repeats=num_samples, axis=0)
 
         x_sampled = self.generative_model.generate(x_rep, m_rep)
 
@@ -49,7 +49,7 @@ class FeatureAcquisition():
         device = next(predictor.parameters()).device
 
         x_sampled = self.conditional_sample() # 전체 값이 샘플링된 x
-        m_repeated = np.repeat(a=m, repeats=num_samples, axis=0) # 기존 x의 mask
+        m_repeated = np.repeat(a=m.cpu().numpy(), repeats=num_samples, axis=0) # 기존 x의 mask
 
         m_upsampled = np.random.binomial(n=1, p=gamma, size=m_repeated.shape) # 각 feature별로 0 또는 1로 변형 
         m_repeated = np.maximum(m_repeated, m_upsampled) # 위에서는 모든 feature별로 진행했으니 max로 병합
@@ -74,19 +74,24 @@ class FeatureAcquisition():
             h_with = self.entropy(p=p_with)
 
             entropy_diff = h_now - h_with
-            entropy_diff = entropy_diff.reshape(-1, num_samples).mean(-1)
+            entropy_diff = entropy_diff.reshape(-1, num_samples).mean(-1) # num_samples 축 평균
             out.append(entropy_diff)
-        return np.stack(out, axis=-1)
+        return np.stack(out, axis=-1) # (N, D)
 
     def acquire(self):
         m = self.m
+        m_np = m.cpu().numpy()
         scores = self.alpha_gamma_cmi()
         scores -= scores.min()
-        scores *= (1 - m)
-        scores += 1e-10 * (1 - m) * np.random.uniform(size=(scores.shape)) # 최고점 score 점수 같음 방지
+        scores *= (1 - m_np)
+        scores += 1e-10 * (1 - m_np) * np.random.uniform(size=(scores.shape)) # 최고점 score 점수 같음 방지
 
         selected = np.argmax(scores, axis=-1)
-        m[np.arange(m.shape[0]), selected] = 1.0
+        m_np[np.arange(m_np.shape[0]), selected] = 1.0
+        
+        # GPU 텐서로 다시 변환
+        device = m.device
+        m = torch.tensor(m_np, dtype=torch.float32, device=device)
         self.m = m # acquire 후 해당 feature의 mask = 1로 변경 
 
         return m, selected
